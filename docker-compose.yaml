@@ -1,0 +1,26 @@
+# A simple bundle docker container for orange
+# docker-compose.yml文件的版本
+version: "3"
+# 管理的服务
+services:
+  cloud:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+    image: reg.docker.lhdrr.com:8081/lvhuan/lua-resty-taos:${TAG:-dev}
+    hostname: taos
+    container_name: lh-taos-${TAG:-dev}
+    ports:
+      - "28866:8866"
+    volumes:
+      - ./lib:/usr/local/lvhuan/lua-resty-taos/lib:rw
+      - ./test.lua:/usr/local/lvhuan/lua-resty-taos/test.lua:rw
+    environment:
+      DEBUG: ${DEBUG:-0}
+      TAG: ${TAG:-dev}
+      MODE: ${MODE:-dev}
+    networks:
+      - app
+networks:
+  app:
+    external: true
