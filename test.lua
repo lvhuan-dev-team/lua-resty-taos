@@ -3,6 +3,7 @@ package.path= "/usr/local/lvhuan/lua-resty-taos/lib/?.lua;/usr/local/openresty/l
 package.cpath= "/usr/local/openresty-debug/lualib/?.so;/usr/local/openresty/lualib/?.so;/usr/local/openresty/luajit/lib/lua/5.1/?.so;;";
 
 local taos = require "resty.taos"
+local stream = require "resty.taos.stream"
 
 local config = {
    host = "127.0.0.1",
@@ -126,7 +127,10 @@ local function cb(t)
 end
 
 print("==================")
-res = driver:open_stream("SELECT COUNT(*) as count, AVG(degree) as avg, MAX(degree) as max, MIN(degree) as min FROM thermometer interval(2s) sliding(2s);)",0,callback,cb)
+
+local st = stream:new(driver)
+
+res = st:open("SELECT COUNT(*) as count, AVG(degree) as avg, MAX(degree) as max, MIN(degree) as min FROM thermometer interval(2s) sliding(2s);)",0,callback,cb)
 if res.code ~=0 then
    print("open stream--- failed:"..res.error)
    return
@@ -151,6 +155,6 @@ while loop_index < 30 do
    loop_index = loop_index + 1
 end
 os.execute("sleep " .. 30)
-driver:close_stream()
+st:close()
 
 driver:close()

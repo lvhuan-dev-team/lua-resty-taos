@@ -157,19 +157,40 @@ TSDB_DATA_TYPE_UBIGINT    = 14,    -- 8 bytes
 
 function _M.new(self)
     local cwrap = {
-        conn  = nil,
+        ffi    = ffi,
+        conn   = nil,
         stream = nil
     }
     return setmetatable(cwrap, mt)
 end
 
-function _M.get_error_string(self)
+local function get_error_string(res)
 
     local str = ffi_new("char *")
-          str = C.taos_errstr(self.conn)
-          str = ffi_string(str)
+    str = C.taos_errstr(res)
+    str = ffi_string(str)
 
     return  str
+end
+
+function _M.get_error_string(self, res)
+    if not res then
+        return  get_error_string(self.conn)
+    else
+        return  get_error_string(res)
+    end
+end
+
+local function get_error_no(res)
+    return C.taos_errno(res)
+end
+
+function _M.get_error_no(self, res)
+    if not res then
+        return get_error_no(self.conn)
+    else
+        return get_error_no(res)
+    end
 end
 
 function _M.connect(self, conf)
@@ -252,12 +273,14 @@ local case = {}
         return val[0]
     end
 
+_M.case = case
+
 function _M.query(self, sql)
     local taos = self.conn
 
     local result = ffi_new("TAOS_RES *")
           result = C.taos_query(taos, sql)
-    local code = C.taos_errno(result)
+    local code = self:get_error_no(result)
 
     if code ~= 0 then
         return {
@@ -300,77 +323,10 @@ function _M.query(self, sql)
 
 end
 
-
-function _M.open_stream(self, sql, stime, handle, callback )
-    local taos = self.conn
-    local code = -1
-    local stream = nil
-    local stream_handle = ffi_new("HANDLEFUNC",  function(param, result, row)
-
-
-        local p = ffi_cast("cb_param *", param)
-        local fields = C.taos_fetch_fields(result)
-        local num_fields = C.taos_num_fields(result);
-
-        local item = {}
-
-        for i = 0, num_fields-1, 1 do
-
-            if ffi_cast("void *",row[i]) > nil then
-                local name = ffi_string(fields[i].name)
-                local type = fields[i].type
-                local func = case[type]
-                item[name] = func(row[i])
-            end
-        end
-
-        handle(item)
-    end)
-
-
-    local p = ffi_new( "cb_param")
-    local cb
-    if callback and type(callback) == "function" then
-        cb = ffi_new("CALLBACK", callback)
-        self.callback = cb
-        --ngx_log(ngx_DEBUG, "has callback")
-    else
-        cb = ffi_new("void *", nil)
-        self.callback = nil
-
-        --ngx_log(ngx_DEBUG, "not callback")
-    end
-    p.callback = cb
-    local param = ffi_new( "void *", p)
-
-    local s = ffi_new("void *")
-          s = C.taos_open_stream(taos, sql, stream_handle, stime, param, cb)
-
-    if ffi_cast("void *", s) > nil then
-        code = 0
-	    local sp = ffi_cast("void *",s)
-        p.stream = sp
-        stream = p
-    end
-
-    self.stream = stream
-    self.handle = stream_handle
-
-    return {
-        code = code,
-        error = self:get_error_string(),
-        stream = stream
-    }
+function _M.query_async(self, sql, callback, param)
 end
 
-function _M.close_stream(self)
-    C.taos_close_stream(self.stream)
-    self.stream = nil
-    self.handle:free()
-    if self.callback then
-        self.callback:free()
-    end
-    return true
+function _M.fetch_rows_async(self, res, callback, param)
 end
 
 function _M.close(self)
@@ -399,6 +355,27 @@ function _M.get_server_info(self)
         return ver
     end
     return nil, "not connected."
+end
+
+function _M.select_db(self, db)
+    if self.conn and db then
+        local recode = C.taos_select_db(self.conn, db)
+        if recode < 0 then
+            return nil, self:get_error_string()
+        elseif recode == 0 then
+            return true, nil
+        end
+    end
+    return nil, "param error"
+end
+
+function _M.subscribe(self, restart, topic, sql, callback, param, interval)
+end
+
+function _M.consume(self, tsub)
+end
+
+function _M.unsubscribe(self, keep_progress)
 end
 
 return _M
