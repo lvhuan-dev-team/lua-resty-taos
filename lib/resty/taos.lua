@@ -106,11 +106,11 @@ ffi.cdef[[
     typedef void (*CALLBACK)(void *);
 
     typedef struct{
-        int callback;
+        CALLBACK callback;
         void *stream;
     } cb_param;
 
-    TAOS_STREAM *taos_open_stream(TAOS *taos, const char *sql, HANDLEFUNC handler, int64_t stime, void *param, int callback);
+    TAOS_STREAM *taos_open_stream(TAOS *taos, const char *sql, HANDLEFUNC handler, int64_t stime, void *param, CALLBACK cb);
     void taos_close_stream(TAOS_STREAM *tstr);
     int taos_load_table_info(TAOS *taos, const char* tableNameList);
 
@@ -163,25 +163,32 @@ function _M.new(self)
     return setmetatable(cwrap, mt)
 end
 
+function _M.get_error_string(self)
+
+    local str = ffi_new("char *")
+          str = C.taos_errstr(self.conn)
+          str = ffi_string(str)
+
+    return  str
+end
+
 function _M.connect(self, conf)
     local code = 0
     local err_msg = nil
     C.taos_init()
     local taos = ffi_new("TAOS *")
-    local port = ffi_cast("uint16_t",conf.port)
-    local user = ffi_cast("const char *", conf.user)
-    local password = ffi_cast("const char *", conf.password)
-    local host = ffi_cast("const char *", conf.host)
-    local db = ffi_cast("const char *", conf.database)
+
+    local port      = ffi_cast("uint16_t",      conf.port)
+    local user      = ffi_cast("const char *",  conf.user)
+    local password  = ffi_cast("const char *",  conf.password)
+    local host      = ffi_cast("const char *",  conf.host)
+    local db        = ffi_cast("const char *",  conf.database)
 
     taos = C.taos_connect(host, user, password, db, port)
 
     if ffi_cast("void *",taos) <= nil then
         code = -1
-        local str = ffi_new("char *")
-        str = C.taos_errstr(taos)
-        str = ffi_string(str)
-        err_msg = "failed to connect server, reason:" .. str
+        err_msg = "failed to connect server, reason: " .. self:get_error_string()
     end
 
     self.conn = taos
@@ -247,19 +254,15 @@ local case = {}
 
 function _M.query(self, sql)
     local taos = self.conn
-    local err_msg = nil
+
     local result = ffi_new("TAOS_RES *")
           result = C.taos_query(taos, sql)
     local code = C.taos_errno(result)
 
     if code ~= 0 then
-        local str = ffi_new("char *")
-        str = C.taos_errstr(taos)
-        str = ffi_string(str)
-        err_msg = str
         return {
             code = code,
-            error = err_msg
+            error = self:get_error_string()
         }
     end
 
@@ -297,7 +300,8 @@ function _M.query(self, sql)
 
 end
 
-function _M.open_stream(self, sql, stime, callback)
+
+function _M.open_stream(self, sql, stime, handle, callback )
     local taos = self.conn
     local code = -1
     local stream = nil
@@ -320,16 +324,27 @@ function _M.open_stream(self, sql, stime, callback)
             end
         end
 
-        callback(item)
+        handle(item)
     end)
 
 
     local p = ffi_new( "cb_param")
-    p.callback = 0
+    local cb
+    if callback and type(callback) == "function" then
+        cb = ffi_new("CALLBACK", callback)
+        self.callback = cb
+        --ngx_log(ngx_DEBUG, "has callback")
+    else
+        cb = ffi_new("void *", nil)
+        self.callback = nil
+
+        --ngx_log(ngx_DEBUG, "not callback")
+    end
+    p.callback = cb
     local param = ffi_new( "void *", p)
 
     local s = ffi_new("void *")
-          s = C.taos_open_stream(taos, sql, stream_handle, stime, param, ffi.new("int",0))
+          s = C.taos_open_stream(taos, sql, stream_handle, stime, param, cb)
 
     if ffi_cast("void *", s) > nil then
         code = 0
@@ -339,15 +354,11 @@ function _M.open_stream(self, sql, stime, callback)
     end
 
     self.stream = stream
-    self.callback = stream_handle
-
-    local errstr = ffi_new("char *")
-    errstr = C.taos_errstr(taos)
-    errstr = ffi_string(errstr)
+    self.handle = stream_handle
 
     return {
         code = code,
-        error = errstr,
+        error = self:get_error_string(),
         stream = stream
     }
 end
@@ -355,7 +366,10 @@ end
 function _M.close_stream(self)
     C.taos_close_stream(self.stream)
     self.stream = nil
-    self.callback:free()
+    self.handle:free()
+    if self.callback then
+        self.callback:free()
+    end
     return true
 end
 
@@ -381,7 +395,7 @@ function _M.get_server_info(self)
     if self.conn then
         local ver = ffi_new("char *")
         ver = C.taos_get_server_info(self.conn)
-        ver == ffi_string(ver)
+        ver = ffi_string(ver)
         return ver
     end
     return nil, "not connected."

@@ -120,9 +120,13 @@ local function callback(t)
       print("key:"..key..", value:"..tostring(value))
    end
 end
+local function cb(t)
+   ngx_log(ngx_DEBUG, "----------------------callback")
+   print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+end
 
 print("==================")
-res = driver:open_stream("SELECT COUNT(*) as count, AVG(degree) as avg, MAX(degree) as max, MIN(degree) as min FROM thermometer interval(2s) sliding(2s);)",0,callback)
+res = driver:open_stream("SELECT COUNT(*) as count, AVG(degree) as avg, MAX(degree) as max, MIN(degree) as min FROM thermometer interval(2s) sliding(2s);)",0,callback,cb)
 if res.code ~=0 then
    print("open stream--- failed:"..res.error)
    return
@@ -146,6 +150,7 @@ while loop_index < 30 do
    os.execute("sleep " .. 1)
    loop_index = loop_index + 1
 end
-
+os.execute("sleep " .. 30)
 driver:close_stream()
+
 driver:close()
