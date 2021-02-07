@@ -1,34 +1,32 @@
-local cjson = require "cjson"
+local taos_lib    = require("resty.taos.library")
+local taos_data   = require("resty.taos.data")
+local taos_result = require("resty.taos.result")
 
-local sfmt = string.format
+local ffi = require("ffi")
+local ffi_cast   = ffi.cast
+local ffi_new    = ffi.new
+local ffi_copy   = ffi.copy
+local ffi_string = ffi.string
+
+local C = taos_lib
 
 local ngx = ngx
 local ngx_log = ngx.log
 local ngx_DEBUG = ngx.DEBUG
+local ngx_WARN  = ngx.WARN
+
+local sfmt = string.format
 
 local ok, new_tab = pcall(require, "table.new")
 if not ok then
     new_tab = function (narr, nrec) return {} end
 end
 
-local ffi, C
-local ffi_string
-local ffi_sizeof
-local ffi_cast
-local ffi_new
-
 local _M = { _VERSION = '0.1' }
 
 local mt = { __index = _M }
 
 function _M.new(self, cwrap)
-
-    ffi = cwrap.ffi
-    ffi_string = ffi.string
-    ffi_sizeof = ffi.sizeof
-    ffi_cast   = ffi.cast
-    ffi_new    = ffi.new
-    C   = cwrap.C
 
     local wrapper = {
         cwrap = cwrap
@@ -40,24 +38,28 @@ function _M.open(self, sql, stime, handle, callback )
     local taos = self.cwrap.conn
     local code = -1
     local stream = nil
-    local stream_handle = ffi_new("HANDLEFUNC",  function(param, result, row)
+    local stream_handle = ffi_new("HANDLEFUNC",  function(param, res, row)
 
+
+        local result = taos_result:new(res)
 
         local p = ffi_cast("cb_param *", param)
-        local fields = C.taos_fetch_fields(result)
-        local num_fields = C.taos_num_fields(result);
+        local fields = result:fetch_fields()
+        local num_fields = result:field_count()
 
         local item = {}
 
         for i = 0, num_fields-1, 1 do
 
             if ffi_cast("void *",row[i]) > nil then
-                local name = ffi_string(fields[i].name)
-                local type = fields[i].type
-                local func = self.cwrap.case[type]
+                local name = fields[i+1].name
+                local type = fields[i+1].type
+                local func = taos_data[type]
                 item[name] = func(row[i])
             end
         end
+
+        result = nil
 
         handle(item)
     end)
@@ -68,12 +70,12 @@ function _M.open(self, sql, stime, handle, callback )
     if callback and type(callback) == "function" then
         cb = ffi_new("CALLBACK", callback)
         self.callback = cb
-        --ngx_log(ngx_DEBUG, "has callback")
+        ngx_log(ngx_DEBUG, "has callback")
     else
         cb = ffi_new("void *", nil)
         self.callback = nil
 
-        --ngx_log(ngx_DEBUG, "not callback")
+        ngx_log(ngx_DEBUG, "not callback")
     end
     p.callback = cb
     local param = ffi_new( "void *", p)

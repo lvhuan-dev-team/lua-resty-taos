@@ -1,9 +1,16 @@
 
 package.path= "/usr/local/lvhuan/lua-resty-taos/lib/?.lua;/usr/local/openresty/luajit/share/lua/5.1/?.lua;;";
 package.cpath= "/usr/local/openresty-debug/lualib/?.so;/usr/local/openresty/lualib/?.so;/usr/local/openresty/luajit/lib/lua/5.1/?.so;;";
-
+local cjson = require "cjson"
 local taos = require "resty.taos"
 local stream = require "resty.taos.stream"
+local taos_subs = require "resty.taos.subscribe"
+
+local ngx = ngx
+local ngx_log = ngx.log
+local ngx_DEBUG = ngx.DEBUG
+local ngx_WARN  = ngx.WARN
+
 
 local config = {
    host = "127.0.0.1",
@@ -26,6 +33,8 @@ end
 local res = driver:query("drop database if exists demo")
 
 res = driver:query("create database demo")
+local conn = res.conn
+
 if res.code ~=0 then
    print("create db--- failed: "..res.error)
    return
@@ -117,9 +126,11 @@ end
 local function callback(t)
    print("------------------------")
    print("continuous query result:")
-   for key, value in pairs(t) do
-      print("key:"..key..", value:"..tostring(value))
-   end
+   --for key, value in pairs(t) do
+    --  print("key:"..key..", value:"..tostring(value))
+   --end
+   print(cjson.encode(t))
+
 end
 local function cb(t)
    ngx_log(ngx_DEBUG, "----------------------callback")
@@ -144,17 +155,36 @@ while loop_index < 30 do
    local t = os.time()*1000
    local v = loop_index
    res = driver:query(string.format("INSERT INTO therm1 VALUES (%d, %d)",t,v))
-
+   print(cjson.encode(res))
    if res.code ~=0 then
       print("continous insertion--- failed:" .. res.error)
       return
    else
-      --print("insert successfully, affected:"..res.affected)
+
+      print("insert successfully, affected:"..res.affected)
    end
    os.execute("sleep " .. 1)
    loop_index = loop_index + 1
 end
-os.execute("sleep " .. 30)
-st:close()
+print(loop_index)
 
+local function print_result(t)
+   print(cjson.encode(t))
+end
+
+local function subscribe_callback(t)
+   print("callback")
+   print_result(t)
+end
+
+local tsub = taos_subs:new(driver)
+
+local r = tsub:subscribe(false,"test", "select * from therm1;",nil,nil,0);
+
+print(cjson.encode(r))
+local ret  = tsub:consume()
+
+print(cjson.encode(ret))
+
+st:close()
 driver:close()
