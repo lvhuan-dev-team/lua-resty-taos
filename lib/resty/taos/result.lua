@@ -2,12 +2,13 @@ local taos_lib  = require("resty.taos.library")
 local taos_data = require("resty.taos.data")
 
 local ffi = require("ffi")
-local ffi_gc = ffi.gc
+local ffi_gc     = ffi.gc
 local ffi_cast   = ffi.cast
 local ffi_new    = ffi.new
 local ffi_copy   = ffi.copy
 local ffi_string = ffi.string
-
+local ffi_typeof = ffi.typeof
+local ffi_istype = ffi.istype
 local C = taos_lib
 
 local ngx = ngx
@@ -28,6 +29,11 @@ local mt = { __index = _M }
 
 function _M.new(self, result)
 
+    local ct = ffi_typeof("TAOS_RES *")
+    if not ffi_istype(ct, result) then
+        return nil
+    end
+
     local wrapper = {
         result = ffi_gc(result, C.taos_free_result)
     }
@@ -41,7 +47,19 @@ end
 
 function _M.fetch_row(self)
     local taos_row = ffi_new("TAOS_ROW")
+    --local void_type = ffi.typeof("void **")
     taos_row = C.taos_fetch_row(self.result)
+
+
+    -- if ffi.istype(void_type, taos_row) then
+    --     ngx.log(ngx.DEBUG,"taos_fetch_row return data type is bool. value: " , tostring(ffi_cast(void_type, taos_row)) )
+    --     return nil
+    -- end
+
+    if tostring(taos_row) == "cdata<void **>: NULL" or taos_row == true then
+        ngx_log(ngx_DEBUG,"taos_fetch_row return data type is bool. value: " , tostring(taos_row))
+        return nil
+    end
 
     if ffi_cast("void *",taos_row) > nil then
         return taos_row

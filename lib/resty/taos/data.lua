@@ -26,6 +26,15 @@ local db_type = {
 
 local case = {}
 
+    case[db_type.TSDB_DATA_TYPE_NULL] = function(data)
+        return nil
+    end
+
+    case[db_type.TSDB_DATA_TYPE_BOOL] = function(data)
+        local val = ffi_cast("char *", data)
+        return tonumber(val[0])==1
+    end
+
     case[db_type.TSDB_DATA_TYPE_TINYINT] = function(data)
         local val = ffi_cast("char *", data)
         return val[0]
@@ -64,11 +73,6 @@ local case = {}
         return val
     end
 
-    case[db_type.TSDB_DATA_TYPE_NCHAR] = function(data)
-        local val = ffi_string(data)
-        return val
-    end
-
     case[db_type.TSDB_DATA_TYPE_TIMESTAMP] = function(data)
         --local val = ffi_cast("int64_t *", data)
         --return val[0]
@@ -79,9 +83,33 @@ local case = {}
         return ffi_string(str)
     end
 
-    case[db_type.TSDB_DATA_TYPE_BOOL] = function(data)
+    case[db_type.TSDB_DATA_TYPE_NCHAR] = function(data)
+        local val = ffi_string(data)
+        return val
+    end
+
+    case[db_type.TSDB_DATA_TYPE_UTINYINT] = function(data)
         local val = ffi_cast("char *", data)
         return val[0]
     end
+
+    case[db_type.TSDB_DATA_TYPE_USMALLINT] = function(data)
+        local val = ffi_cast("short *", data)
+        return val[0]
+    end
+
+    case[db_type.TSDB_DATA_TYPE_UINT] = function(data)
+        local val = ffi_cast("int *", data)
+        return val[0]
+    end
+
+    case[db_type.TSDB_DATA_TYPE_UBIGINT] = function(data)
+        local val = ffi_cast("int64_t *", data)
+        local str = ffi_new("char[?]",25)
+        ffi.C.sprintf(str, "%lld", val[0])
+
+        return ffi_string(str)
+    end
+
 
 return case

@@ -39,14 +39,15 @@ function _M.subscribe(self, restart, topic, sql, callback, param, interval)
     local subs, code = nil, -1
     local subs_handle =  ffi_new("void *", nil)
     param = param or ffi_new("void *", nil)
+
     if callback and type(callback) == "function" then
         cb = ffi_new("CALLBACK", callback)
-
         subs_handle = ffi_new("TAOS_SUBSCRIBE_CALLBACK", function(tsub, res, param, code)
 
             local result = taos_result:new(res)
 
             if code ~= 0 then
+                ngx_log(ngx_DEBUG, "callback code ~= 0, code: ", code,", error: ",result:errstr())
                 local ret = {
                     code = code,
                     error = result:errstr()
@@ -54,8 +55,12 @@ function _M.subscribe(self, restart, topic, sql, callback, param, interval)
                 return callback(ret)
             end
 
-            local ret = result:totable()
-
+            local ret
+            if result then
+                ret = result:totable()
+            else
+                ret = nil
+            end
             return callback(ret)
         end)
     end
@@ -92,7 +97,7 @@ function _M.unsubscribe(self, keep_progress)
     local keep = keep_progress and 1 or 0
     C.taos_unsubscribe(self.subs, keep)
 
-    if self.handle then
+    if self.handle and ffi_cast("void *", self.handle) > nil then
         self.handle:free()
     end
 

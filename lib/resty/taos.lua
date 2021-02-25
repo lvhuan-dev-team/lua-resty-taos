@@ -139,11 +139,15 @@ function _M.query(self, sql)
           res = C.taos_query(taos, sql)
 
     local result = taos_result:new(res)
-    local ret = result:totable()
 
-    result:free()
-    return ret
+    if result then
+        local ret = result:totable()
 
+        result:free()
+        return ret
+    end
+
+    return nil
 end
 
 function _M.query_async(self, sql, callback, param)
