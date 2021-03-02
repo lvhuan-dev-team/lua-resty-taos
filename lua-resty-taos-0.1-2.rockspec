@@ -13,6 +13,13 @@ description = {
 build = {
    type = "builtin",
    modules = {
+      ["resty.taos.async"] = "lib/resty/taos/async.lua",
+      ["resty.taos.data"] = "lib/resty/taos/data.lua",
+      ["resty.taos.library"] = "lib/resty/taos/library.lua",
+      ["resty.taos.result"] = "lib/resty/taos/result.lua",
+      ["resty.taos.stmt"] = "lib/resty/taos/stmt.lua",
+      ["resty.taos.stream"] = "lib/resty/taos/stream.lua",
+      ["resty.taos.subscribe"] = "lib/resty/taos/subscribe.lua",
       ["resty.taos"] = "lib/resty/taos.lua"
    }
 }
