@@ -80,7 +80,7 @@ local case = {}
         local str = ffi_new("char[?]",25)
         ffi.C.sprintf(str, "%lld", val[0])
 
-        return ffi_string(str)
+        return tonumber(ffi_string(str))
     end
 
     case[db_type.TSDB_DATA_TYPE_NCHAR] = function(data)
@@ -108,7 +108,7 @@ local case = {}
         local str = ffi_new("char[?]",25)
         ffi.C.sprintf(str, "%lld", val[0])
 
-        return ffi_string(str)
+        return tonumber(ffi_string(str))
     end
 
 
