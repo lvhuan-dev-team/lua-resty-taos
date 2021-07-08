@@ -5,6 +5,34 @@ local ffi_new    = ffi.new
 local ffi_copy   = ffi.copy
 local ffi_string = ffi.string
 
+
+local function c_float_data_plus_to_lua_data(measured, sz_base_class)
+
+    local BASECLASS;
+    if(sz_base_class == "float") then
+        BASECLASS = 6;
+    elseif(sz_base_class == "double") then
+        BASECLASS = 15;
+    end
+
+    local n_multiple;
+    local n_accuracy;
+    for n_base = 1, BASECLASS do
+        n_accuracy = 10 ^ n_base;
+        local x_value = measured / n_accuracy;
+        if(x_value < 1.0) then
+            n_multiple = n_base;
+            break;
+        end
+    end
+
+    n_accuracy = 10 ^ (BASECLASS - n_multiple);
+    local decimal = measured * n_accuracy;
+    decimal = (decimal % 1 >= 0.5 and math.ceil(decimal)) or math.floor(decimal);
+    decimal = decimal / n_accuracy;
+    return  decimal;
+end
+
 --Data type definition
 local db_type = {
     TSDB_DATA_TYPE_NULL       = 0 ,    -- 1 bytes
@@ -60,12 +88,12 @@ local case = {}
 
     case[db_type.TSDB_DATA_TYPE_FLOAT] = function(data)
         local val = ffi_cast("float *", data)
-        return val[0]
+        return c_float_data_plus_to_lua_data(val[0], "float")
     end
 
     case[db_type.TSDB_DATA_TYPE_DOUBLE] = function(data)
         local val = ffi_cast("double *", data)
-        return val[0]
+        return c_float_data_plus_to_lua_data(val[0], "double")
     end
 
     case[db_type.TSDB_DATA_TYPE_BINARY] = function(data)
@@ -109,6 +137,7 @@ local case = {}
         ffi.C.sprintf(str, "%lld", val[0])
 
         return tonumber(ffi_string(str))
+
     end
 
 
