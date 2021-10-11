@@ -53,14 +53,14 @@ function _M.subscribe(self, restart, topic, sql, callback, param, interval)
                     code = code,
                     error = result:errstr()
                 }
-                result:free()
+                --result:free()
                 return callback(ret)
             end
 
             local ret
             if result then
                 ret = result:totable()
-                result:free()
+                --result:free()
             else
                 ret = nil
             end
@@ -94,7 +94,7 @@ function _M.consume(self)
     if result then
 
         local ret = result:totable()
-        result:free()
+        --result:free()
         return ret
     end
 

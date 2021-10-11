@@ -55,9 +55,9 @@ function _M.fetch_row(self)
     --     ngx.log(ngx.DEBUG,"taos_fetch_row return data type is bool. value: " , tostring(ffi_cast(void_type, taos_row)) )
     --     return nil
     -- end
-
-    if tostring(taos_row) == "cdata<void **>: NULL" or taos_row == true then
-        ngx_log(ngx_DEBUG,"taos_fetch_row return data type is bool. value: " , tostring(taos_row))
+    local taos_row_str = tostring(taos_row)
+    if taos_row_str == "cdata<void **>: NULL" or taos_row == true then
+        ngx_log(ngx_DEBUG,"taos_fetch_row return data type is bool. value: " , taos_row_str)
         return nil
     end
 
