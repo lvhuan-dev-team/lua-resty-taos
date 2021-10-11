@@ -47,17 +47,20 @@ function _M.subscribe(self, restart, topic, sql, callback, param, interval)
             local result = taos_result:new(res)
 
             if code ~= 0 then
+                ngx_log(ngx_DEBUG, "error")
                 ngx_log(ngx_DEBUG, "callback code ~= 0, code: ", code,", error: ",result:errstr())
                 local ret = {
                     code = code,
                     error = result:errstr()
                 }
+                result:free()
                 return callback(ret)
             end
 
             local ret
             if result then
                 ret = result:totable()
+                result:free()
             else
                 ret = nil
             end
@@ -88,9 +91,15 @@ function _M.consume(self)
           res = C.taos_consume(self.subs)
 
     local result = taos_result:new(res)
+    if result then
 
-    local ret = result:totable()
-    return ret
+        local ret = result:totable()
+        result:free()
+        return ret
+    end
+
+    return nil
+
 end
 
 function _M.unsubscribe(self, keep_progress)

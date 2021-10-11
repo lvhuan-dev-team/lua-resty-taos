@@ -59,7 +59,7 @@ function _M.open(self, sql, stime, handle, callback )
             end
         end
 
-        result = nil
+        result:free()
 
         handle(item)
     end)

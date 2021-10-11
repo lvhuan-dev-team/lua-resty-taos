@@ -1,6 +1,6 @@
 rockspec_format = "3.0"
 package = "lua-resty-taos"
-version = "0.1-2"
+version = "0.1-3"
 source = {
    url = "git+https://github.com/lvhuan-dev-team/lua-resty-taos.git"
 }

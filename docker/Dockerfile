@@ -11,13 +11,14 @@ WORKDIR ${LH_TAOS_DIR}
 
 COPY lib       ./lib
 COPY test.lua  ./
-RUN dnf install -y gcc gcc-c++ make cmake epel-release git
+RUN dnf install -y gcc gcc-c++ make cmake epel-release git  libarchive
 
 RUN \
        cd /tmp \
     && git clone https://github.com/taosdata/TDengine.git \
     && cd TDengine \
     && git submodule update --init --recursive \
+    && git checkout ver-2.0.17.4 \
     && mkdir debug \
     && cd debug \
     && cmake .. \
