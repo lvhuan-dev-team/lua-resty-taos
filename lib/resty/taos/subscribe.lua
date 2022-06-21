@@ -12,6 +12,7 @@ local C = taos_lib
 local ngx = ngx
 local ngx_log = ngx.log
 local ngx_DEBUG = ngx.DEBUG
+local ngx_ERROR = ngx.ERROR
 local ngx_WARN  = ngx.WARN
 
 local sfmt = string.format
@@ -35,40 +36,37 @@ end
 
 function _M.subscribe(self, restart, topic, sql, callback, param, interval)
     local reset = restart and 1 or 0
-    local cb = ffi_new("void *", nil)
+    --local cb = ffi_new("void *", nil)
     local subs, code = nil, -1
     local subs_handle =  ffi_new("void *", nil)
     param = param or ffi_new("void *", nil)
 
     if callback and type(callback) == "function" then
-        cb = ffi_new("CALLBACK", callback)
-        subs_handle = ffi_new("TAOS_SUBSCRIBE_CALLBACK", function(tsub, res, param, code)
+        --cb = ffi_new("CALLBACK", callback)
+        subs_handle = ffi_new("TAOS_SUBSCRIBE_CALLBACK",
+            function(tsub, res, param, code)
 
-            local result = taos_result:new(res)
+                local ret = nil
+                if code ~= 0 then
+                    ngx_log(ngx_ERROR, "callback error, code: ", code,", error: ",result:errstr())
+                    ret = {
+                        code = code,
+                        error = result:errstr()
+                    }
+                    return callback(ret)
+                end
 
-            if code ~= 0 then
-                ngx_log(ngx_DEBUG, "error")
-                ngx_log(ngx_DEBUG, "callback code ~= 0, code: ", code,", error: ",result:errstr())
-                local ret = {
-                    code = code,
-                    error = result:errstr()
-                }
-                --result:free()
+                local result = taos_result:new(res)
+                if result then
+                    ret = result:totable()
+                end
+
                 return callback(ret)
-            end
 
-            local ret
-            if result then
-                ret = result:totable()
-                --result:free()
-            else
-                ret = nil
-            end
-            return callback(ret)
-        end)
+            end)
     end
 
-    local taos =self.cwrap.conn
+    local taos = self.cwrap.conn
     local s = ffi_new("TAOS_SUB *")
           s = C.taos_subscribe(taos, reset , topic, sql , subs_handle, param, interval)
 
@@ -76,13 +74,13 @@ function _M.subscribe(self, restart, topic, sql, callback, param, interval)
             code = 0
             subs = s
     end
+
     self.handle = subs_handle
     self.subs = subs
 
     return {
         code = code,
-        error = ffi_string(C.taos_errstr(taos)),
-        --subs = subs
+        error = "" --self.cwrap:get_error_string() --ffi_string(C.taos_errstr(taos)),
     }
 end
 
@@ -92,10 +90,7 @@ function _M.consume(self)
 
     local result = taos_result:new(res)
     if result then
-
-        local ret = result:totable()
-        --result:free()
-        return ret
+        return result:totable()
     end
 
     return nil

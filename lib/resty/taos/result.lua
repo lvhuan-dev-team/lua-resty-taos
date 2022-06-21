@@ -18,6 +18,8 @@ local ngx_WARN  = ngx.WARN
 
 local sfmt = string.format
 
+local cdata_null_point = ffi.new("void**", nil)
+
 local ok, new_tab = pcall(require, "table.new")
 if not ok then
     new_tab = function (narr, nrec) return {} end
@@ -27,45 +29,34 @@ local _M = { _VERSION = '0.1' }
 
 local mt = { __index = _M }
 
+local ct = ffi_typeof("TAOS_RES *")
+
 function _M.new(self, result)
 
-    local ct = ffi_typeof("TAOS_RES *")
     if not ffi_istype(ct, result) then
         return nil
     end
 
     local wrapper = {
-        result = ffi_gc(result, C.taos_free_result)
+        result = result
     }
     return setmetatable(wrapper, mt)
 end
-
 
 function _M.precision(self)
     return C.taos_result_precision(self.result)
 end
 
 function _M.fetch_row(self)
-    local taos_row = ffi_new("TAOS_ROW")
-    --local void_type = ffi.typeof("void **")
-    taos_row = C.taos_fetch_row(self.result)
+    local taos_row = C.taos_fetch_row(self.result)
 
-
-    -- if ffi.istype(void_type, taos_row) then
-    --     ngx.log(ngx.DEBUG,"taos_fetch_row return data type is bool. value: " , tostring(ffi_cast(void_type, taos_row)) )
-    --     return nil
-    -- end
-    local taos_row_str = tostring(taos_row)
-    if taos_row_str == "cdata<void **>: NULL" or taos_row == true then
-        ngx_log(ngx_DEBUG,"taos_fetch_row return data type is bool. value: " , taos_row_str)
+    if taos_row == cdata_null_point or taos_row == true then
+        -- ngx_log(ngx_DEBUG,"taos_fetch_row return data type is bool. value: " , tostring(taos_row))
         return nil
     end
 
-    if ffi_cast("void *",taos_row) > nil then
-        return taos_row
-    end
+    return taos_row
 
-    return nil
 end
 
 function _M.fetch_block(self)
@@ -83,8 +74,7 @@ function _M.field_count(self)
 end
 
 function _M.fetch_lengths(self)
-    local lens = ffi_new("int *")
-    lens = C.taos_fetch_lengths(self.result)
+    local lens = C.taos_fetch_lengths(self.result)
     return lens
 
 end
@@ -94,8 +84,7 @@ function _M.affected_rows(self)
 end
 
 function _M.fetch_fields(self)
-    local taos_fields = ffi_new("TAOS_FIELD *")
-          taos_fields = C.taos_fetch_fields(self.result)
+    local taos_fields = C.taos_fetch_fields(self.result)
 
     local num    = C.taos_field_count(self.result)
     local fields = {}
@@ -117,13 +106,17 @@ end
 
 function _M.free(self)
     C.taos_free_result(self.result)
+    self.result = nil
+    self = nil
 end
 
 function _M.errstr(self)
     local str = ffi_new("char *")
 
-    str = C.taos_errstr(self.result)
-    str = ffi_string(str)
+    if self.result then
+        str = C.taos_errstr(self.result)
+        str = ffi_string(str)
+    end
 
     return  str
 end
@@ -136,7 +129,6 @@ function _M.totable(self)
 
     local code   = self:errno()
     if code ~= 0 then
-
         return {
             code = code,
             error = self:errstr(),
@@ -150,6 +142,7 @@ function _M.totable(self)
     local affect_rows = self:affected_rows()
     local items = {}
 
+    ngx.log(ngx.DEBUG,"num_fileds: ", num_fields, " affect_rows: ", affect_rows)
     local row = self:fetch_row()
     while(row) do
         rows = rows + 1
@@ -159,7 +152,11 @@ function _M.totable(self)
                 local name = fields[i+1].name
                 local type = fields[i+1].type
                 local func = taos_data[type]
-                item[name] = func(row[i])
+                if func then
+                    item[name] = func(row[i])
+                else
+                    ngx.log(ngx.ERROR, "data type: ", type, " not match!!!", "item name: ", name, "data value: ", row[i])
+                end
             end
         end
         table.insert(items, item)

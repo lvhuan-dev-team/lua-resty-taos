@@ -1,6 +1,7 @@
 local taos_lib    = require("resty.taos.library")
 local taos_data   = require("resty.taos.data")
 local taos_result = require("resty.taos.result")
+--local taos_async  = require("resty.taos.async")
 local ffi = require("ffi")
 
 
@@ -31,7 +32,7 @@ local mt = { __index = _M }
 
 function _M.new(self)
     local cwrap = {
-        conn   = nil
+        conn = nil
     }
     return setmetatable(cwrap, mt)
 end
@@ -39,18 +40,20 @@ end
 local function get_error_string(res)
 
     local str = ffi_new("char *")
-    str = C.taos_errstr(res)
-    str = ffi_string(str)
+          str = C.taos_errstr(res)
+          str = ffi_string(str)
 
     return  str
 end
 
 function _M.get_error_string(self, res)
-    if not res then
-        return  get_error_string(self.conn)
-    else
-        return  get_error_string(res)
+    if res then
+        return get_error_string(res)
     end
+    if self.conn then
+        return get_error_string(self.conn)
+    end
+    return "not connect."
 end
 
 local function get_error_no(res)
@@ -74,8 +77,7 @@ function _M.cleanup(self)
 end
 
 function _M.get_client_info(self)
-    local client_info = ffi_new("char *")
-          client_info = C.taos_get_client_info()
+    local client_info = C.taos_get_client_info()
           client_info = ffi_string(client_info)
     return client_info
 end
@@ -127,22 +129,19 @@ function _M.connect(self, conf)
     self.conn = taos
 
     return {
-        code = code,
-        conn = taos,
+        code  = code,
+        conn  = taos,
         error = err_msg
     }
 end
 
 function _M.query(self, sql)
     local taos = self.conn
-    local res = ffi_new("TAOS_RES *")
-          res = C.taos_query(taos, sql)
 
+    local res = C.taos_query(taos, sql)
     local result = taos_result:new(res)
-
     if result then
         local ret = result:totable()
-
         result:free()
         return ret
     end
@@ -150,11 +149,17 @@ function _M.query(self, sql)
     return nil
 end
 
-function _M.query_async(self, sql, callback, param)
+--[[
+function _M.query_async(self, sql, callback)
+    local async = taos_async:new(self)
+    return async:query(sql, callback)
 end
 
-function _M.fetch_rows_async(self, res, callback, param)
+function _M.fetch_rows_async(self, res, callback)
+    local async = taos_async:new(self)
+    return async:fetch_rows(res, callback)
 end
+--]]
 
 function _M.close(self)
     local taos = self.conn
@@ -169,15 +174,14 @@ function _M.close(self)
 
     self.conn = nil
     return {
-        code = code,
+        code  = code,
         error = err_msg
     }
 end
 
 function _M.get_server_info(self)
     if self.conn then
-        local ver = ffi_new("char *")
-        ver = C.taos_get_server_info(self.conn)
+        local ver = C.taos_get_server_info(self.conn)
         ver = ffi_string(ver)
         return ver
     end

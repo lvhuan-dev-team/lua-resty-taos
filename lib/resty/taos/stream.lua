@@ -7,6 +7,7 @@ local ffi_cast   = ffi.cast
 local ffi_new    = ffi.new
 local ffi_copy   = ffi.copy
 local ffi_string = ffi.string
+local ffi_cdef   = ffi.cdef
 
 local C = taos_lib
 
@@ -25,6 +26,13 @@ end
 local _M = { _VERSION = '0.1' }
 
 local mt = { __index = _M }
+
+ffi_cdef([[
+    typedef struct{
+        CALLBACK callback;
+        void *stream;
+    } cb_param;
+]])
 
 function _M.new(self, cwrap)
 

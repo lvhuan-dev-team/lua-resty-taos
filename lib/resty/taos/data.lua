@@ -4,6 +4,7 @@ local ffi_cast   = ffi.cast
 local ffi_new    = ffi.new
 local ffi_copy   = ffi.copy
 local ffi_string = ffi.string
+local tonumber = tonumber
 
 
 local function c_float_data_plus_to_lua_data(measured, sz_base_class)

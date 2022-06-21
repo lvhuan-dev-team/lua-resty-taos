@@ -157,32 +157,37 @@ end
 
 local function callback(t)
 
+   print("+++")
    print("连续查询结果：")
    --for key, value in pairs(t) do
     --  print("key:"..key..", value:"..tostring(value))
    --end
    print(cjson.encode(t))
+   print("+++")
 
 end
 local function cb(t)
+   print("---")
    print("回调")
+   print("---")
    print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+
 end
 
 
 print("---------------------")
 
-print("流测试开始...")
+-- print("流测试开始...")
 
-local st = stream:new(driver)
+-- local st = stream:new(driver)
 
-res = st:open("SELECT COUNT(*) as count, AVG(degree) as avg, MAX(degree) as max, MIN(degree) as min FROM thermometer interval(2s) sliding(2s);)",0,callback,cb)
-if res.code ~=0 then
-   print("开启流失败:"..res.error)
-   return
-else
-   print("开启流成功.")
-end
+-- res = st:open("SELECT COUNT(*) as count, AVG(degree) as avg, MAX(degree) as max, MIN(degree) as min FROM thermometer interval(2s) sliding(2s);)",0,callback,cb)
+-- if res.code ~=0 then
+--    print("开启流失败:"..res.error)
+--    return
+-- else
+--    print("开启流成功.")
+-- end
 
 local function print_result(t)
    if t then
@@ -193,58 +198,92 @@ local function print_result(t)
 end
 
 local function subscribe_callback(t)
-   print("=> 订阅回调:")
+   print("=> 异步订阅回调:")
    print_result(t)
    print("<=")
 end
 
 
-print("---------------------")
-local tsub1 = taos_subs:new(driver)
-print("开始异步订阅")
-local r1 = tsub1:subscribe(true,"test1", "select * from therm1;",subscribe_callback,nil,5000);
+--print("---------------------")
+--local tsub1 = taos_subs:new(driver)
+-- print("开始异步订阅")
+-- local r1 = tsub1:subscribe(true,"test1", "select * from therm1;",subscribe_callback,nil,1000);
 
-print("异步订阅结果: ",cjson.encode(r1))
+-- print("异步订阅结果: ",cjson.encode(r1))
 
+local function ins_data()
+   local driver = taos:new()
 
-print("从现在起，我们开始在一个确定的（无限的，如果你想）循环中连续插入。")
-local loop_index = 0
-while loop_index < 30 do
-   local t = os.time()*1000
-   local v = loop_index
-   res = driver:query(string.format("INSERT INTO therm1 VALUES (%d, %d)",t,v))
-   print("执行插入SQL回复结果: ",cjson.encode(res))
+   print("准备连接, 开始测试...")
+   local res = driver:connect(config)
    if res.code ~=0 then
-      print("连续插入---失败: " .. res.error)
+      print("连接失败: "..res.error)
       return
    else
-
-      print("插入成功, 影响行数:"..res.affected)
+      print("连接成功.")
    end
-   os.execute("sleep " .. 1)
-   loop_index = loop_index + 1
-end
-print(loop_index)
+   
+   res = driver:query("use demo")
 
+   print("从现在起，我们开始在一个确定的（无限的，如果你想）循环中连续插入。")
+   local loop_index = 0
+   while loop_index < 300 do
+      ngx.update_time()
+      local t = ngx.now()*1000
+      local v = loop_index
+      res = driver:query(string.format("INSERT INTO therm1 VALUES (%d, %d)",t,v))
+      print("执行插入SQL回复结果: ",cjson.encode(res))
+      if res and res.code ~=0 then
+         print("连续插入---失败: " .. res.error)
+         --return
+      else
+
+         print("插入成功, 影响行数:"..res.affected .. " " .. loop_index)
+      end
+      --os.execute("sleep " .. 1)
+      --coroutine.yield()
+      ngx.sleep(0.1)
+      loop_index = loop_index + 1
+   end
+   print(loop_index)
+
+   driver:close()
+
+end
+
+ngx.thread.spawn(ins_data)
 
 print("开始同步订阅")
 local tsub = taos_subs:new(driver)
 
 local r = tsub:subscribe(false,"test", "select * from therm1;",nil,nil,0);
-
 print("订阅结果: ",cjson.encode(r))
+
+local loop_index = 0
+while loop_index < 300 do
+   
+   --local ret  = tsub:consume()
+   --print("消费结果: "..cjson.encode(ret))
+   ngx.sleep(1)
+   loop_index = loop_index + 1
+end
+
+
+
+
+
 local ret  = tsub:consume()
-print("消费结果: "..cjson.encode(ret))
+print("消费结果1: "..cjson.encode(ret))
 
 tsub:unsubscribe()
 print("同步订阅退订")
 
 
-tsub1:unsubscribe()
-print("异步订阅退订")
+--tsub1:unsubscribe()
+--print("异步订阅退订")
 
-st:close()
-print("关闭流.")
+--st:close()
+--print("关闭流.")
 
 driver:close()
 print("关闭连接.")

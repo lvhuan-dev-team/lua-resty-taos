@@ -28,8 +28,7 @@ local mt = { __index = _M }
 
 function _M.new(self, conn)
 
-    local stmt = ffi_new("TAOS_STMT *")
-          stmt = C.taos_stmt_init(conn)
+    local stmt = C.taos_stmt_init(conn)
 
     local wrapper = {
         stmt = ffi_gc(stmt, C.taos_stmt_close)
@@ -56,12 +55,12 @@ end
 
 
 function _M.use_result(self)
-    local res = ffi_new("TAOS_RES *")
-          res = C.taos_stmt_use_result(self.stmt)
+    local res = C.taos_stmt_use_result(self.stmt)
     return res
 end
 
 function _M.close(self)
     C.taos_stmt_close(self.stmt)
 end
+
 return _M
